@@ -1,25 +1,18 @@
+mod endpoints;
+mod models;
+
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use std::thread::sleep;
+use axum::routing::get;
+use axum::{Server, Router};
+use models::{Que, Database, Status};
+use tokio::join;
 use tokio::time::sleep as asleep;
 
-#[derive(Debug)]
-struct Task {
-    input: String,
-    status: Status,
-}
-
-#[derive(Debug)]
-enum Status {
-    Qued,
-    Processing,
-    Done,
-}
-
-type Que = Arc<Mutex<VecDeque<(String, String)>>>;
-type Database = Arc<Mutex<HashMap<String, Task>>>;
+use crate::models::Task;
 
 // syncronous 'heavy' process
 fn process(id: String) {
@@ -73,82 +66,17 @@ async fn main() {
         }
     });
 
-    let que_clone = Arc::clone(&que);
-    let db_clone = Arc::clone(&db);
-    // creates tasks
-    tokio::task::spawn(async move {
-        for i in 0..3 {
-            {
-                let mut que = que_clone.lock().unwrap();
-                let mut db = db_clone.lock().unwrap();
-                let id = format!("{}", i);
-                let task = Task {
-                    input: id.clone(),
-                    status: Status::Qued,
-                };
-                db.insert(id.clone(), task);
-                println!("added task: {}", id);
+    // let que_clone = Arc::clone(&que);
+    // let db_clone = Arc::clone(&db);
+    
+    let app = Router::new().route("/", get(|| async {
+        println!("got hi");
+        "hi"
+    }));
 
-                que.push_back((id.clone(), id));
-            }
-            asleep(Duration::from_secs(1)).await;
-        }
+    // listens for tasks
+    let server = Server::bind(&"0.0.0.0:3000".parse().unwrap())
+        .serve(app.into_make_service());
 
-        asleep(Duration::from_secs(8)).await;
-
-        println!("--report #1--");
-        {
-            let db = db_clone.lock().unwrap();
-            for t in db.iter() {
-                println!("{:?}", t);
-            }
-        }
-
-        for i in 3..6 {
-            {
-                let mut que = que_clone.lock().unwrap();
-                let mut db = db_clone.lock().unwrap();
-                let id = format!("{}", i);
-                let task = Task {
-                    input: id.clone(),
-                    status: Status::Qued,
-                };
-                db.insert(id.clone(), task);
-                println!("added task: {}", id);
-
-                que.push_back((id.clone(), id));
-            }
-            asleep(Duration::from_secs(1)).await;
-        }
-
-        asleep(Duration::from_secs(8)).await;
-        println!("--report #2--");
-        {
-            let db = db_clone.lock().unwrap();
-            for t in db.iter() {
-                println!("{:?}", t);
-            }
-        }
-
-        for i in 6..9 {
-            {
-                let mut que = que_clone.lock().unwrap();
-                let mut db = db_clone.lock().unwrap();
-                let id = format!("{}", i);
-                let task = Task {
-                    input: id.clone(),
-                    status: Status::Qued,
-                };
-                db.insert(id.clone(), task);
-                println!("added task: {}", id);
-
-                que.push_back((id.clone(), id));
-            }
-            asleep(Duration::from_secs(1)).await;
-        }
-    })
-    .await
-    .unwrap();
-
-    compute.await.unwrap();
+    let (_,_) = join!(server, compute);
 }
