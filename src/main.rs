@@ -3,31 +3,29 @@ mod models;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 use std::time::Duration;
 
-use std::thread::sleep;
-use axum::routing::get;
-use axum::{Server, Router};
-use models::{Que, Database, Status};
 use tokio::join;
 use tokio::time::sleep as asleep;
 
-use crate::models::Task;
+use axum::Server;
+use endpoints::routes;
+use models::{Database, Que, ServiceState, Status};
 
 // syncronous 'heavy' process
 fn process(id: String) {
-    println!("  <process> started: {}", id);
     sleep(Duration::from_secs(5));
     println!("  <process> ended: {}", id);
 }
 
 #[tokio::main]
 async fn main() {
-    let que: Que = Arc::new(Mutex::new(VecDeque::new()));
-    let db: Database = Arc::new(Mutex::new(HashMap::new()));
+    let que: Que = Mutex::new(VecDeque::new());
+    let db: Database = Mutex::new(HashMap::new());
+    let state: Arc<ServiceState> = Arc::new(ServiceState { que, db });
 
-    let que_clone = Arc::clone(&que);
-    let db_clone = Arc::clone(&db);
+    let state_clone = Arc::clone(&state);
     // processes tasks
     let compute = tokio::task::spawn(async move {
         // wait for the other 'spawn' created tasks midway
@@ -35,14 +33,14 @@ async fn main() {
 
         loop {
             let new_task = {
-                let mut que = que_clone.lock().unwrap();
+                let mut que = state_clone.que.lock().unwrap();
                 que.pop_front()
             };
 
             match new_task {
                 Some((id, _input)) => {
                     {
-                        let mut db = db_clone.lock().unwrap();
+                        let mut db = state_clone.db.lock().unwrap();
                         let mut task = db.get_mut(&id).unwrap();
                         task.status = Status::Processing;
                     }
@@ -54,7 +52,7 @@ async fn main() {
                     .await
                     .unwrap();
                     {
-                        let mut db = db_clone.lock().unwrap();
+                        let mut db = state_clone.db.lock().unwrap();
                         let mut task = db.get_mut(&id).unwrap();
                         task.status = Status::Done;
                     }
@@ -66,17 +64,9 @@ async fn main() {
         }
     });
 
-    // let que_clone = Arc::clone(&que);
-    // let db_clone = Arc::clone(&db);
-    
-    let app = Router::new().route("/", get(|| async {
-        println!("got hi");
-        "hi"
-    }));
-
     // listens for tasks
-    let server = Server::bind(&"0.0.0.0:3000".parse().unwrap())
-        .serve(app.into_make_service());
+    let server =
+        Server::bind(&"0.0.0.0:3000".parse().unwrap()).serve(routes(state).into_make_service());
 
-    let (_,_) = join!(server, compute);
+    let (_, _) = join!(server, compute);
 }
