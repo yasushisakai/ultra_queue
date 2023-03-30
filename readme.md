@@ -4,3 +4,5 @@
 
 
 [api documentation](https://yasushisakai.com/neverwhere_api.html)
+
+['the heavy computation' (for now)](https://gist.github.com/yasushisakai/f14dd402d8aa4a58d622371d0cad4448)
