@@ -1,9 +1,10 @@
 mod endpoints;
 mod models;
+mod process;
 
+use process::process;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
 use std::time::Duration;
 
 use tokio::join;
@@ -12,12 +13,6 @@ use tokio::time::sleep as asleep;
 use axum::Server;
 use endpoints::routes;
 use models::{Database, Que, ServiceState, Status};
-
-// syncronous 'heavy' process
-fn process(id: String) {
-    sleep(Duration::from_secs(5));
-    println!("  <process> ended: {}", id);
-}
 
 #[tokio::main]
 async fn main() {
@@ -38,7 +33,7 @@ async fn main() {
             };
 
             match new_task {
-                Some((id, _input)) => {
+                Some((id, input)) => {
                     {
                         let mut db = state_clone.db.lock().unwrap();
                         let mut task = db.get_mut(&id).unwrap();
@@ -46,15 +41,15 @@ async fn main() {
                     }
 
                     let id_clone = id.clone();
-                    tokio::task::spawn_blocking(move || {
-                        process(id_clone);
-                    })
-                    .await
-                    .unwrap();
+
+                    let success = tokio::task::spawn_blocking(move || process(id_clone, input))
+                        .await
+                        .unwrap();
+
                     {
                         let mut db = state_clone.db.lock().unwrap();
                         let mut task = db.get_mut(&id).unwrap();
-                        task.status = Status::Done;
+                        task.status = if success { Status::Done } else { Status::Error };
                     }
                 }
                 None => {
