@@ -1,15 +1,49 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::Mutex,
 };
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+pub type Que = Mutex<VecDeque<(String, String)>>;
+pub type Database = Mutex<HashMap<String, Task>>;
+pub type Votes = Mutex<HashMap<String, HashSet<String>>>;
+pub type IdAlias = Mutex<HashMap<String, String>>;
+
+#[derive(Default)]
+pub struct ServiceState {
+    pub que: Que,
+    pub db: Database,
+    pub votes: Votes,
+    pub alias: IdAlias,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub input: String,
     pub status: Status,
+    pub added: DateTime<Utc>,
+    pub likes: u32,
+}
+
+impl Task {
+    pub fn new(input: &String) -> Self {
+        Self {
+            input: input.clone(),
+            status: Status::Queued,
+            added: Utc::now(),
+            likes: 0,
+        }
+    }
+    pub fn increment(&mut self) {
+        self.likes += 1;
+    }
+
+    pub fn decrement(&mut self) {
+        self.likes -= 1;
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,6 +56,7 @@ pub struct TaskResponse {
     pub id: String,
     pub input: String,
     pub status: Status,
+    pub likes: u32,
 }
 
 impl TaskResponse {
@@ -30,6 +65,7 @@ impl TaskResponse {
             id: id.to_string(),
             input: task.input.clone(),
             status: task.status.clone(),
+            likes: task.likes,
         }
     }
 }
@@ -49,10 +85,15 @@ pub enum Status {
     Error,
 }
 
-pub type Que = Mutex<VecDeque<(String, String)>>;
-pub type Database = Mutex<HashMap<String, Task>>;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VoteRequest {
+    pub city_id: String,
+    pub user_id: String,
+    pub is_increment: bool,
+}
 
-pub struct ServiceState {
-    pub que: Que,
-    pub db: Database,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AliasRequest {
+    pub user_id: String,
+    pub alias: String,
 }

@@ -3,8 +3,8 @@ mod models;
 mod process;
 
 use process::process;
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::join;
@@ -12,13 +12,11 @@ use tokio::time::sleep as asleep;
 
 use axum::Server;
 use endpoints::routes;
-use models::{Database, Que, ServiceState, Status};
+use models::{ServiceState, Status};
 
 #[tokio::main]
 async fn main() {
-    let que: Que = Mutex::new(VecDeque::new());
-    let db: Database = Mutex::new(HashMap::new());
-    let state: Arc<ServiceState> = Arc::new(ServiceState { que, db });
+    let state = Arc::new(ServiceState::default());
 
     let state_clone = Arc::clone(&state);
     // processes tasks
