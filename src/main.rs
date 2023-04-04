@@ -59,7 +59,7 @@ async fn main() {
 
     // listens for tasks
     let server =
-        Server::bind(&"0.0.0.0:3000".parse().unwrap()).serve(routes(state).into_make_service());
+        Server::bind(&"0.0.0.0:5000".parse().unwrap()).serve(routes(state).into_make_service());
 
     let (_, _) = join!(server, compute);
 }

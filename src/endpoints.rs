@@ -76,6 +76,18 @@ async fn check_task(
     Json(tasks)
 }
 
+async fn check_votes(
+    State(state): State<Arc<ServiceState>>,
+    Path(id): Path<String>,
+) -> Json<Vec<String>> {
+    let votes = state.votes.lock().unwrap();
+
+    match votes.get(&id) {
+        Some(vts) => Json(vts.iter().cloned().collect()),
+        None => Json(Vec::new()),
+    }
+}
+
 async fn vote(
     State(state): State<Arc<ServiceState>>,
     Json(request): Json<VoteRequest>,
@@ -121,6 +133,7 @@ pub fn routes(state: Arc<ServiceState>) -> Router {
         .route("/list", get(list_tasks))
         .route("/submit", post(submit_task))
         .route("/check/:id", get(check_task))
+        .route("/votes/:id", get(check_votes))
         .route("/vote", post(vote))
         .route("/dump", get(dump))
         .route("/apply", post(apply))
